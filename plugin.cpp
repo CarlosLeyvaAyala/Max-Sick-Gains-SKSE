@@ -1,12 +1,12 @@
-SKSEPluginLoad(const SKSE::LoadInterface *skse) {
-    SKSE::Init(skse);
+#include "logger.h"
+using namespace SKSE;
+using namespace RE;
 
-    // Once all plugins and mods are loaded, then the ~ console is ready and can
-    // be printed to
-    SKSE::GetMessagingInterface()->RegisterListener([](SKSE::MessagingInterface::Message *message) {
-        if (message->type == SKSE::MessagingInterface::kDataLoaded)
-            RE::ConsoleLog::GetSingleton()->Print("Max Sick Gains has been installed");
-    });
+SKSEPluginLoad(const LoadInterface *skse) {
+    Init(skse);
+
+    SetupLog();
+    logger::debug("Max Sick Gains has been installed");
 
     return true;
 }
