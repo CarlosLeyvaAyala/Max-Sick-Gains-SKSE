@@ -39,6 +39,9 @@ void ForEachSpell(TESSpellList::SpellData* spells, const FN& DoSomething) {
     }
 }
 
+inline TESForm* GetFormFromFile(FormID id, string_view modName) {
+    return TESDataHandler::GetSingleton()->LookupForm(id, modName);
+}
 ////////////////////////////////////////////////////////////
 void TestActor(Actor* a) {
     if (!a) {
@@ -71,11 +74,19 @@ void OnGameLoaded() {
 }
 
 void OnDataLoaded() {
-    auto* sweetroll = TESForm::LookupByID(0x64b3d);
-    log::debug("Name: {} Value: {}", 
-               sweetroll->GetName(),
-               sweetroll->GetGoldValue());
-    TestActor(TESForm::LookupByID<Actor>(0x14));
+    auto& armors = TESDataHandler::GetSingleton()->GetFormArray<TESObjectARMO>();
+    log::debug("Number of armors: {}", armors.size());
+    for (auto* a : armors) {
+        if (a->fullName.contains("bikini"))
+            log::debug("{}. {} ({:x})", a->GetFullName(), a->GetFormEditorID(), a->GetFormID());
+    }
+    
+    auto& outfits = TESDataHandler::GetSingleton()->GetFormArray<BGSOutfit>();
+    log::debug("Number of outfits: {}", outfits.size());
+    //outfits.push_back();
+
+    auto s = GetFormFromFile(0x96c, "Max Sick Gains.esp");
+    if (s) log::debug("Maxick spell FX found: {}", s->GetName());
 }
 
 void OnMessage(MessagingInterface::Message* msg) {
@@ -89,6 +100,55 @@ void OnMessage(MessagingInterface::Message* msg) {
         OnDataLoaded();
 }
 
+void OnStartSleep() {
+    auto* vm = BSScript::Internal::VirtualMachine::GetSingleton();
+    if (!vm) return;
+
+    //BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
+    //const char* entryName = "UITextEntryMenu";
+    //auto args = RE::MakeFunctionArguments(std::move(entryName));
+    //vm->DispatchStaticCall("UIExtensions", "InitMenu", args, callback);
+
+    log::debug("Starting sleep");
+}
+
+struct MaxickEventSink : public BSTEventSink<BSAnimationGraphEvent>,
+                         public BSTEventSink<TESSleepStartEvent>,
+                         public BSTEventSink<TESSleepStopEvent> {
+    BSEventNotifyControl ProcessEvent(const BSAnimationGraphEvent* e,
+                                      BSTEventSource<BSAnimationGraphEvent>* source) {
+        log::debug("Animation - Holder {} Tag {} Payload {}", 
+            e->holder->GetName(), 
+            e->tag, 
+            e->payload);
+        return BSEventNotifyControl::kContinue;
+    }
+
+    BSEventNotifyControl ProcessEvent(const TESSleepStartEvent* e, 
+                                      BSTEventSource<TESSleepStartEvent>* source) {
+        OnStartSleep();
+        return BSEventNotifyControl::kContinue;
+    }
+
+    BSEventNotifyControl ProcessEvent(const TESSleepStopEvent* e, 
+                                      BSTEventSource<TESSleepStopEvent>* source) {
+        log::debug("--------------------- End sleep");
+        return BSEventNotifyControl::kContinue;
+    }
+};
+
+
+
+void HookEvents() {
+    auto* eventSink = new MaxickEventSink();
+    auto* evHolder = ScriptEventSourceHolder::GetSingleton();
+    evHolder->AddEventSink<TESSleepStartEvent>(eventSink);
+    evHolder->AddEventSink<TESSleepStopEvent>(eventSink);
+    //SKSE::GetPapyrusInterface
+    //BShkbAnimationGraph::AddEventSink(eventSink);
+    //GetModCallbackEventSource()->AddEventSink();
+}
+
 SKSEPluginLoad(const LoadInterface* skse) {
     Init(skse);
 
@@ -96,6 +156,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
     log::debug("Max Sick Gains is ready to work");
 
     GetMessagingInterface()->RegisterListener(OnMessage);
+    HookEvents();
 
     return true;
 }
